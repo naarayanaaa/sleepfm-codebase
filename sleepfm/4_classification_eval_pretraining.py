@@ -38,11 +38,18 @@ def main(args):
 
     output_file = args.output_file
     path_to_output = os.path.join(dataset_dir, f"{output_file}")
-    breakpoint()
+    if not os.path.isdir(dataset_dir):
+        logger.error(f"Dataset directory not found: {dataset_dir}")
+        raise SystemExit(1)
+
+    logger.info(f"Using dataset directory: {dataset_dir}")
+    logger.info(f"Saving evaluation artifacts to: {path_to_output}")
+
     modality_type = args.modality_type
     num_per_event = args.num_per_event
     model_name = args.model_name
 
+    os.makedirs(path_to_output, exist_ok=True)
     path_to_figures = os.path.join(path_to_output, f"figures")
     path_to_models = os.path.join(path_to_output, f"models")
     path_to_probs = os.path.join(path_to_output, f"probs")
@@ -73,6 +80,9 @@ def main(args):
         dataset_events = pickle.load(f)
 
     path_to_eval_data = os.path.join(path_to_output, f"eval_data")
+    if not os.path.isdir(path_to_eval_data):
+        logger.error(f"Evaluation data directory not found: {path_to_eval_data}")
+        raise SystemExit(1)
     with open(os.path.join(path_to_eval_data, test_emb_file), "rb") as f:
         emb_test = pickle.load(f)
 
