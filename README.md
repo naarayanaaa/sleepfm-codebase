@@ -56,7 +56,32 @@ PSG files may be stored in different formats. Here, we specifically provide scri
   - This script converts the PSG files saved in the raw data folder to short 30-second epoch `.npy` files. It extracts the necessary channels and sleep-related events as well. 
 
 - **Step 2:** `1_prepare_dataset.py`
-  - This script creates the pretrain/train/valid/test split and manages them inside pickle files to be used later during pretraining and evaluation. 
+  - This script creates the pretrain/train/valid/test split and manages them inside pickle files to be used later during pretraining and evaluation.
+
+### Working with the CAP Sleep Database
+
+We provide dedicated utilities in `sleepfm/cap/` for running exploratory analysis on the PhysioNet CAP Sleep Database and converting recordings to the SleepFM epoch format.
+
+1. **Configure paths** – Set the root directories for raw and processed data using environment variables (paths are relative to the repository if the variables are not set):
+
+   ```bash
+   export SLEEPFM_RAW_PATH=/path/to/raw_data
+   export SLEEPFM_PROCESSED_PATH=/path/to/processed_data
+   ```
+
+2. **Run exploratory analysis** – Generate channel audits, stage distributions, and CAP event summaries:
+
+   ```bash
+   python -m sleepfm.cap.eda /path/to/cap_dataset /path/to/output/eda_report
+   ```
+
+3. **Convert to SleepFM format** – Extract canonical channels, resample to 100 Hz, and save 30 s epochs plus label dictionaries:
+
+   ```bash
+   python -m sleepfm.cap.preprocess /path/to/cap_dataset /path/to/output/cap_sleepfm --chunk-duration 30 --target-sfreq 100
+   ```
+
+   The command writes `X/<recording_id>/*.npy` epoch tensors, `Y/<recording_id>.pickle` label dictionaries, and a `cap_preprocessing_report.csv` summarising processed subjects. You can then continue with `sleepfm/1_prepare_dataset.py` and the downstream embedding/classification scripts using the generated directory as `--dataset_dir`.
 
 ## Pretraining
 

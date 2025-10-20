@@ -14,9 +14,10 @@ CONFIG = types.SimpleNamespace(
     CACHE=_PARAM.get("cache", ".cache"),
 )
 
-#define the paths
-PATH_TO_RAW_DATA = "/oak/stanford/groups/mignot/rahul/data/challenge-2018/training/"
-PATH_TO_PROCESSED_DATA = "/oak/stanford/groups/mignot/rahul/pc18"
+# Define the paths via environment variables so the repository can run outside
+# the original Stanford infrastructure.
+PATH_TO_RAW_DATA = os.environ.get("SLEEPFM_RAW_PATH", "data/raw")
+PATH_TO_PROCESSED_DATA = os.environ.get("SLEEPFM_PROCESSED_PATH", "data/processed")
 
 # Define Sleep related global variables
 
@@ -42,21 +43,53 @@ EVENT_TO_ID = {
 }
 
 LABEL_MAP = {
-    "Sleep stage W": "Wake", 
-    "Sleep stage N1": "Stage 1", 
-    "Sleep stage N2": "Stage 2", 
-    "Sleep stage N3": "Stage 3", 
-    "Sleep stage R": "REM", 
-    "W": "Wake", 
-    "N1": "Stage 1", 
-    "N2": "Stage 2", 
-    "N3": "Stage 3", 
-    "REM": "REM", 
-    "wake": "Wake", 
-    "nonrem1": "Stage 1", 
-    "nonrem2": "Stage 2", 
-    "nonrem3": "Stage 3", 
-    "rem": "REM", 
+    "Sleep stage W": "Wake",
+    "Sleep stage N1": "Stage 1",
+    "Sleep stage N2": "Stage 2",
+    "Sleep stage N3": "Stage 3",
+    "Sleep stage R": "REM",
+    "Sleep Stage W": "Wake",
+    "Sleep Stage N1": "Stage 1",
+    "Sleep Stage N2": "Stage 2",
+    "Sleep Stage N3": "Stage 3",
+    "Sleep Stage R": "REM",
+    "W": "Wake",
+    "N1": "Stage 1",
+    "N2": "Stage 2",
+    "N3": "Stage 3",
+    "N4": "Stage 3",
+    "REM": "REM",
+    "R": "REM",
+    "wake": "Wake",
+    "nonrem1": "Stage 1",
+    "nonrem2": "Stage 2",
+    "nonrem3": "Stage 3",
+    "rem": "REM",
+    "Stage W": "Wake",
+    "Stage N1": "Stage 1",
+    "Stage N2": "Stage 2",
+    "Stage N3": "Stage 3",
+    "Stage N4": "Stage 3",
+    "Stage R": "REM",
+    "Stage 1": "Stage 1",
+    "Stage 2": "Stage 2",
+    "Stage 3": "Stage 3",
+    "Stage 4": "Stage 3",
+    "S0": "Wake",
+    "S1": "Stage 1",
+    "S2": "Stage 2",
+    "S3": "Stage 3",
+    "S4": "Stage 3",
+    "MT": "Wake",
+    "Movement": "Wake",
+    "Movement Time": "Wake",
+    "Awake": "Wake",
+    "Wake": "Wake",
+    "REM sleep": "REM",
+    "REM Sleep": "REM",
+    "NonREM1": "Stage 1",
+    "NonREM2": "Stage 2",
+    "NonREM3": "Stage 3",
 }
 
 
