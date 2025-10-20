@@ -46,7 +46,7 @@ Now, your data is downloaded to the server. Later on, we will use this path to r
 
 All our main pipeline Python scripts are inside the `sleepfm/` folder. The numbers following the scripts indicate the order in which they are intended to be run. We also provide corresponding bash scripts to execute the Python scripts inside the `sleepfm/bash_scripts` folder. Below, we describe each step.
 
-Also note that there are `sleepfm/utils.py` and `sleepfm/config.py` helper scripts. The `utils.py` script contains all the helper functions and `config.py` contains all the paths and global variables used at different steps in the pipeline below. Make sure to take a look at the file and set the paths according to your needs. 
+Also note that there are `sleepfm/utils.py` and `sleepfm/config.py` helper scripts. The `utils.py` script contains all the helper functions and `config.py` contains all the paths and global variables used at different steps in the pipeline below. Make sure to take a look at the file and set the paths according to your needs. Each CLI entry point first calls the validators in `sleepfm/config_validators.py`, which confirm the channel schema and write `schema_ok.txt` to the chosen output directory. The same directory also receives a `run_config.json` snapshot of the command arguments and timestamp for easy experiment tracking.
 
 ## Preprocessing Dataset
 

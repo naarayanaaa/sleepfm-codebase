@@ -1,32 +1,32 @@
-import pandas as pd
-from tqdm import tqdm
-import pickle
-import os
-import torch
-from loguru import logger
-import matplotlib.pyplot as plt
 import argparse
-import numpy as np
+import os
+import pickle
+import sys
 from collections import Counter
 
-import sys
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
-from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
-from sklearn.linear_model import LogisticRegression
 import seaborn as sns
+import torch
+from loguru import logger
 from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import (accuracy_score, average_precision_score,
+                             classification_report, confusion_matrix, roc_auc_score,
+                             roc_curve)
+from sklearn.metrics import precision_recall_curve
+from tqdm import tqdm
 from xgboost import XGBClassifier
-from sklearn.metrics import roc_curve, auc, roc_auc_score
-from sklearn.metrics import precision_recall_curve, average_precision_score
 
-import sys
 sys.path.append("../model")
-import models
 import config
-from config import (MODALITY_TYPES, CLASS_LABELS, 
+import models
+from config import (MODALITY_TYPES, CLASS_LABELS,
                     LABELS_DICT, PATH_TO_PROCESSED_DATA)
+from config_validators import seed_everything, validate_schema, write_run_metadata
 from utils import train_model
-from dataset import EventDataset as Dataset 
+from dataset import EventDataset as Dataset
 
 
 def main(args):
@@ -38,6 +38,9 @@ def main(args):
 
     output_file = args.output_file
     path_to_output = os.path.join(dataset_dir, f"{output_file}")
+    validate_schema(output_dir=path_to_output)
+    seed_everything(42)
+    write_run_metadata(vars(args), path_to_output)
     breakpoint()
     modality_type = args.modality_type
     num_per_event = args.num_per_event

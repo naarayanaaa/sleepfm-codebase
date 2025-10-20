@@ -15,9 +15,10 @@ import math
 import sys
 sys.path.append("../model")
 import models
-from config import (CONFIG, CHANNEL_DATA, 
-                    ALL_CHANNELS, CHANNEL_DATA_IDS, 
+from config import (CONFIG, CHANNEL_DATA,
+                    ALL_CHANNELS, CHANNEL_DATA_IDS,
                     PATH_TO_PROCESSED_DATA)
+from config_validators import seed_everything, validate_schema, write_run_metadata
 
 from dataset import EventDataset as Dataset 
 
@@ -40,6 +41,19 @@ def generate_eval_embed(
         dataset_dir = PATH_TO_PROCESSED_DATA
 
     output_dir = os.path.join(dataset_dir, f"{output_file}")
+    validate_schema(output_dir=output_dir)
+    seed_everything(42)
+    write_run_metadata(
+        {
+            "output_file": output_file,
+            "dataset_dir": dataset_dir,
+            "dataset_file": dataset_file,
+            "batch_size": batch_size,
+            "num_workers": num_workers,
+            "splits": splits,
+        },
+        output_dir,
+    )
 
     device = torch.device("cuda")
     splits = splits.split(",")

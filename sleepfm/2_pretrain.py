@@ -14,9 +14,10 @@ import numpy as np
 import sys
 sys.path.append("../model")
 import models
-from config import (CONFIG, CHANNEL_DATA, 
-                    ALL_CHANNELS, CHANNEL_DATA_IDS, 
+from config import (CONFIG, CHANNEL_DATA,
+                    ALL_CHANNELS, CHANNEL_DATA_IDS,
                     PATH_TO_PROCESSED_DATA)
+from config_validators import seed_everything, validate_schema, write_run_metadata
 from dataset import EventDataset as Dataset 
 
 
@@ -60,6 +61,24 @@ def train(
     output = os.path.join(dataset_dir, f"outputs/output_{mode}_{dataset_file_prefix}_lr_{lr}_lr_sp_{lr_step_period}_wd_{weight_decay}_bs_{batch_size}_{modality_types_string}")
 
     output = os.path.join(CONFIG.OUTPUT, output)
+    validate_schema(output_dir=output)
+    seed_everything(42)
+    write_run_metadata(
+        {
+            "dataset_dir": dataset_dir,
+            "dataset_file": dataset_file,
+            "batch_size": batch_size,
+            "num_workers": num_workers,
+            "weight_decay": weight_decay,
+            "lr": lr,
+            "lr_step_period": lr_step_period,
+            "epochs": epochs,
+            "mode": mode,
+            "modality_types": modality_types,
+            "output": output,
+        },
+        output,
+    )
     os.makedirs(output, exist_ok=True)
     temperature = torch.nn.parameter.Parameter(torch.as_tensor(0.))
 

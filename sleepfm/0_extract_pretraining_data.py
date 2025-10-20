@@ -14,6 +14,7 @@ import pickle
 import sys
 import config
 from config import ALL_CHANNELS, PATH_TO_RAW_DATA, PATH_TO_PROCESSED_DATA
+from config_validators import seed_everything, validate_schema, write_run_metadata
 from scipy.io import loadmat
 import h5py
 import glob
@@ -270,6 +271,10 @@ def main():
         path_to_edf_files = PATH_TO_RAW_DATA
     if path_to_save == None:
         path_to_save = PATH_TO_PROCESSED_DATA
+
+    validate_schema(output_dir=path_to_save)
+    seed_everything(42)
+    write_run_metadata(args, path_to_save)
 
     num_files = args.num_files
     chunk_duration = args.chunk_duration
