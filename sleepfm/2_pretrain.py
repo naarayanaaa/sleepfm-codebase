@@ -40,17 +40,19 @@ class StringListParamType(click.ParamType):
 @click.option("--epochs", type=int, default=100)
 @click.option("--mode", type=click.Choice(["pairwise", "leave_one_out"]), default="pairwise")
 @click.option("--modality_types", type=StringListParamType(), default="respiratory,sleep_stages,ekg")
+@click.option("--device", type=str, default=None, help="Device to run training on (e.g., 'cuda', 'cuda:0', or 'cpu').")
 def train(
     dataset_dir,
     dataset_file,
     batch_size,
     num_workers,
-    weight_decay, 
-    lr, 
+    weight_decay,
+    lr,
     lr_step_period,
     epochs,
     mode,
-    modality_types
+    modality_types,
+    device
 ):
     if dataset_dir == None:
         dataset_dir = PATH_TO_PROCESSED_DATA
@@ -71,8 +73,17 @@ def train(
     logger.info(f"Batch Size: {batch_size}; Number of Workers: {num_workers}")
     logger.info(f"Weight Decay: {weight_decay}; Learning Rate: {lr}; Learning Step Period: {lr_step_period}")
 
-    device = torch.device("cuda")
-    logger.info(f"Device set to Cuda")
+    if device is None:
+        device_str = "cuda" if torch.cuda.is_available() else "cpu"
+    else:
+        device_str = device
+
+    if device_str.startswith("cuda") and not torch.cuda.is_available():
+        logger.warning("CUDA requested but not available. Falling back to CPU.")
+        device_str = "cpu"
+
+    device = torch.device(device_str)
+    logger.info(f"Using device: {device}")
 
     num_targets = len(modality_types)
     ij = sum([((i, j), (j, i)) for i in range(len(modality_types)) for j in range(i + 1, len(modality_types))], ())
@@ -92,7 +103,7 @@ def train(
     if "respiratory" in modality_types:
         model_resp = models.EffNet(in_channel=len(CHANNEL_DATA_IDS["Respiratory"]), stride=2, dilation=1)
         model_resp.fc = torch.nn.Linear(model_resp.fc.in_features, 512)
-        if device.type == "cuda":
+        if device.type == "cuda" and torch.cuda.device_count() > 1:
             model_resp = torch.nn.DataParallel(model_resp)
         model_resp.to(device)
         model_dict["respiratory"] = model_resp
@@ -100,7 +111,7 @@ def train(
     if "sleep_stages" in modality_types:
         model_sleep = models.EffNet(in_channel=len(CHANNEL_DATA_IDS["Sleep_Stages"]), stride=2, dilation=1)
         model_sleep.fc = torch.nn.Linear(model_sleep.fc.in_features, 512)
-        if device.type == "cuda":
+        if device.type == "cuda" and torch.cuda.device_count() > 1:
             model_sleep = torch.nn.DataParallel(model_sleep)
         model_sleep.to(device)
         model_dict["sleep_stages"] = model_sleep
@@ -108,7 +119,7 @@ def train(
     if "ekg" in modality_types:
         model_ekg = models.EffNet(in_channel=len(CHANNEL_DATA_IDS["EKG"]), stride=2, dilation=1)
         model_ekg.fc = torch.nn.Linear(model_ekg.fc.in_features, 512)
-        if device.type == "cuda":
+        if device.type == "cuda" and torch.cuda.device_count() > 1:
             model_ekg = torch.nn.DataParallel(model_ekg)
         model_ekg.to(device)
         model_dict["ekg"] = model_ekg
@@ -134,7 +145,7 @@ def train(
     best_loss = math.inf
 
     if os.path.isfile(os.path.join(output, "checkpoint.pt")):
-        checkpoint = torch.load(os.path.join(output, "checkpoint.pt"))
+        checkpoint = torch.load(os.path.join(output, "checkpoint.pt"), map_location=device)
 
         if model_key == "respiratory":
             model_prefix = "resp"
@@ -202,9 +213,11 @@ def train(
                             #     break
                             # count += 1
 
-                            resp = resp.to(device, dtype=torch.float)
-                            sleep = sleep.to(device, dtype=torch.float)
-                            ekg = ekg.to(device, dtype=torch.float)
+                            non_blocking = device.type == "cuda"
+
+                            resp = resp.to(device, dtype=torch.float, non_blocking=non_blocking)
+                            sleep = sleep.to(device, dtype=torch.float, non_blocking=non_blocking)
+                            ekg = ekg.to(device, dtype=torch.float, non_blocking=non_blocking)
 
                             if len(modality_types) == 3:
                                 emb = [
