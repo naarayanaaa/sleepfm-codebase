@@ -9,6 +9,7 @@ from tqdm import tqdm
 import multiprocessing
 from config import LABEL_MAP, PATH_TO_PROCESSED_DATA
 import random
+from config_validators import seed_everything, validate_schema, write_run_metadata
 
 def parallel_prepare_data(args):
 
@@ -99,6 +100,10 @@ def main():
 
     if dataset_dir == None:
         dataset_dir = PATH_TO_PROCESSED_DATA
+
+    validate_schema(output_dir=dataset_dir)
+    seed_everything(42)
+    write_run_metadata(args, dataset_dir)
 
     random_state = args.random_state
     num_threads = args.num_threads
