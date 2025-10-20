@@ -11,7 +11,8 @@ from tqdm import tqdm
 from loguru import logger
 import pickle
 import matplotlib.pyplot as plt
-from typing import Any, Union
+from itertools import combinations
+from typing import Any, Iterable, Optional, Sequence, Union
 from sklearn.metrics import classification_report, accuracy_score, confusion_matrix
 from sklearn.linear_model import LogisticRegression
 import seaborn as sns
@@ -58,6 +59,38 @@ def load_data(filename: str) -> Any:
     else:
         raise ValueError("Filename must end with .pkl, .pickle, or .json")
 
+
+
+def assert_disjoint(*iterables: Iterable[Any], names: Optional[Sequence[str]] = None) -> None:
+    """Assert that the provided iterables contain no overlapping elements.
+
+    Parameters
+    ----------
+    *iterables: Sequence[Iterable[Any]]
+        A variadic number of iterables whose elements will be compared for overlap.
+    names: Sequence[str] | None
+        Optional sequence of names corresponding to each iterable, used for clearer
+        error messages. When omitted, generic identifiers will be generated.
+
+    Raises
+    ------
+    AssertionError
+        If any pair of iterables share one or more elements.
+    """
+
+    sets = [set(iterable) for iterable in iterables]
+
+    if names is None:
+        names = [f"set_{index}" for index in range(len(sets))]
+
+    for (idx_a, set_a), (idx_b, set_b) in combinations(enumerate(sets), 2):
+        intersection = set_a.intersection(set_b)
+        if intersection:
+            name_a = names[idx_a]
+            name_b = names[idx_b]
+            raise AssertionError(
+                f"Found overlapping elements between {name_a} and {name_b}: {sorted(intersection)}"
+            )
 
 
 # Wrapper for getEDFFiles
