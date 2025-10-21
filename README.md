@@ -6,8 +6,7 @@
 - [Our paper](https://arxiv.org/abs/2405.17766v1) is out on arxiv.
 
 ## 📖 Introduction
-Sleep is a complex physiological process evaluated through various modalities recording electrical brain, cardiac, and respiratory activities. We curate a large polysomnography dataset from over 14,000 participants comprising over 100,000 hours of multi-modal sleep recordings. Leveraging this extensive dataset, we developed SleepFM, the first multi-modal foundation model for sleep analysis. We show that a novel leave-one-out approach for contrastive learning significantly improves downstream task performance compared to representations from standard pairwise contrastive learning. A logistic regression model trained on SleepFM's learned embeddings outperforms an end-to-end trained convolutional neural network (CNN) on sleep stage classification (macro AUROC 0.88 vs 0.72 and macro AUPRC 0.72 vs 0.48) and sleep disordered breathing detection (AUROC 0.85 vs 0.69 and AUPRC 0.77 vs 0.61).  Notably, the learned embeddings achieve 48% top-1 average accuracy in retrieving the corresponding recording clips of other modalities from 90,000 candidates. This work demonstrates the value of holistic multi-modal sleep modeling to fully capture the richness of sleep recordings.
-
+Sleep is a complex physiological process evaluated through various modalities recording electrical brain, cardiac, and respiratory activities. We curate a large polysomnography dataset from over 14,000 participants comprising over 100,000 hours of multi-modal sleep recordings. Leveraging this extensive dataset, we developed SleepFM, the first multi-modal foundation model for sleep analysis. We show that a novel leave-one-out approach for contrastive learning significantly improves downstream task performance compared to representations from standard pairwise contrastive learning. A logistic regression model trained on SleepFM's learned embeddings outperforms an end-to-end trained convolutional neural network (CNN) on sleep stage classification (macro AUROC 0.88 vs 0.72 and macro AUPRC 0.72 vs 0.48) and sleep disordered breathing detection (AUROC 0.85 vs 0.69 and AUPRC 0.77 vs 0.61). Notably, the learned embeddings achieve 48% top-1 average accuracy in retrieving the corresponding recording clips of other modalities from 90,000 candidates. This work demonstrates the value of holistic multi-modal sleep modeling to fully capture the richness of sleep recordings.
 
 # 📖 Table of Contents
 1. [Installation](#installation)
@@ -31,55 +30,106 @@ conda activate sleepfm_env
 
 # 👩‍💻 Usage
 
-*This is a research code. Here, we provide our pretraining pipeline with a publicly available dataset, as we cannot release our internal pretraining dataset at the moment.*
+*This repository now ships a complete CAP (Cyclic Alternating Pattern) workflow that reuses the released SleepFM checkpoint, prepares the dataset, trains a downstream classifier, and exports attribution maps for explainability.*
 
-This codebase will serve as a framework that you can adapt to your dataset for pretraining and testing. Below, we outline the steps to pretrain and adapt the model on a publicly available dataset called [The PhysioNet/Computing in Cardiology Challenge 2018 (CinC)](https://physionet.org/content/challenge-2018/1.0.0/test/#files-panel). Please keep in mind that this dataset is small and will most likely not yield optimal results.
+All executable scripts live in the `sleepfm/` directory and are numbered in the order they are typically invoked. Helper modules (`sleepfm/utils.py`, `sleepfm/config.py`) expose common configuration and plotting utilities.
 
-## Downloading Dataset
+## 1. Configure paths and environment
 
-We are working with CinC dataset as a dummy usecase. 
+`sleepfm/config.py` defaults to a CAP-friendly layout. You can override the raw and processed directories as well as channel definitions with environment variables:
 
-- Follow the [link](https://physionet.org/content/challenge-2018/1.0.0/test/#files-panel). You may need to create a physionet account. 
-- Scroll to the bottom where you will see Files, and either directly download as zip files or run the following command. `wget -r -N -c -np https://physionet.org/files/challenge-2018/1.0.0/`
+```bash
+export SLEEPFM_CAP_RAW_DIR="/path/to/cap/raw"
+export SLEEPFM_CAP_PROCESSED_DIR="/path/to/cap/processed"
+```
 
-Now, your data is downloaded to the server. Later on, we will use this path to reference the dataset.
+Optional overrides are documented inline in `sleepfm/config.py` (e.g., `SLEEPFM_CAP_CHANNELS`, `SLEEPFM_CAP_ADDITIONAL_LABEL_MAPS`). The provided Conda environment already includes `mne`, `scikit-learn`, and PyTorch with CUDA support.
 
-All our main pipeline Python scripts are inside the `sleepfm/` folder. The numbers following the scripts indicate the order in which they are intended to be run. We also provide corresponding bash scripts to execute the Python scripts inside the `sleepfm/bash_scripts` folder. Below, we describe each step.
+## 2. Preprocess CAP EDF files
 
-Also note that there are `sleepfm/utils.py` and `sleepfm/config.py` helper scripts. The `utils.py` script contains all the helper functions and `config.py` contains all the paths and global variables used at different steps in the pipeline below. Make sure to take a look at the file and set the paths according to your needs. 
+`sleepfm/0_extract_pretraining_data.py` reads CAP PSG recordings (``*-PSG.edf``) and the accompanying hypnogram files, slices them into 30 second epochs, and stores the signals plus per-epoch metadata. Subject-level labels (e.g., disorder presence) can be supplied via CSV.
 
-## Preprocessing Dataset
+```bash
+python sleepfm/0_extract_pretraining_data.py \
+  --data_path /path/to/cap/raw \
+  --save_path /path/to/cap/processed \
+  --metadata_csv /path/to/metadata.csv \
+  --metadata_id_column record_id \
+  --metadata_label_column disorder \
+  --label_key disorder \
+  --chunk_duration 30 --target_sampling_rate 256 --num_threads 8
+```
 
-PSG files may be stored in different formats. Here, we specifically provide scripts to process .EDF file format. PSG events can also be stored in multiple different formats. We provide preprocessing scripts for CinC, but please note that you will more than likely need to change these initial preprocessing scripts, which are used to extract the 30-second epoch data from EDF files and their corresponding labels from the events file. This step does not require GPU support. 
+Each epoch is saved under `processed/X/<record>/<record>_<epoch>.npy` and the corresponding label dictionary (sleep stage, subject id, and optional disorder label) lives in `processed/Y/<record>.pickle`.
 
-- **Step 1:** `0_extract_pretraining_data.py`
-  - This script converts the PSG files saved in the raw data folder to short 30-second epoch `.npy` files. It extracts the necessary channels and sleep-related events as well. 
+## 3. Create dataset splits
 
-- **Step 2:** `1_prepare_dataset.py`
-  - This script creates the pretrain/train/valid/test split and manages them inside pickle files to be used later during pretraining and evaluation. 
+`sleepfm/1_prepare_dataset.py` builds subject-level splits and produces two pickle files:
 
-## Pretraining
+* `dataset.pickle` keeps the hierarchical subject → label → event structure for contrastive pretraining.
+* `dataset_events_*.pickle` flattens events into `(path, label)` pairs for downstream classifiers. Use `--label_key disorder` to request disorder labels instead of sleep stages.
 
-SleepFM uses 1D CNN and contrastive learning for pretraining. For more details about our model architecture, please check out our [paper](https://arxiv.org/abs/2405.17766v1). This step requires GPU support. 
+```bash
+python sleepfm/1_prepare_dataset.py \
+  --dataset_dir /path/to/cap/processed \
+  --label_key disorder \
+  --num_threads 8
+```
 
-- **Step 1:** `2_pretrain.py`
-  - This script trains our contrastive learning framework using all three modalities (respiratory, sleep stages, and EKG). Note that we call the brain activity signal modality sleep stages here because they are primarily used for sleep staging. 
-- **Step 2:** `3_generate_embed_pretraining.py`
-  - After pretraining our model, we want to generate the embeddings for train/valid/test so that we can train a linear head (logistic regression) for downstream classification. We do sleep stage classification here. 
+## 4. Stage the released SleepFM checkpoint
 
-## Evaluation
+Copy `sleepfm/checkpoint/best.pt` into a run directory inside your processed dataset (for example `/path/to/cap/processed/cap_run/best.pt`). All downstream scripts expect the checkpoint next to their outputs.
 
-Note: These evaluation results will not match the ones that we have in our paper. We cannot release our dataset at the moment. This step does not require GPU support. 
+## 5. Generate SleepFM embeddings
 
-- **Step 2:** `4_classification_eval_pretraining.py`
-  - Finally, this script trains a logistic regression model and calculates performance metrics such as AUROC and AUPRC.
+`sleepfm/3_generate_embed_pretraining.py` loads modality-specific encoders from the checkpoint and exports L2-normalised embeddings for each split. Pass the dataset event file that matches the labels you intend to train on:
 
+```bash
+python sleepfm/3_generate_embed_pretraining.py cap_run \
+  --dataset_dir /path/to/cap/processed \
+  --dataset_file dataset_events_disorder_-1.pickle \
+  --splits train,valid,test
+```
 
-## Model Checkpoint
+Embeddings are written to `/path/to/cap/processed/cap_run/eval_data/` and preserve modality ordering (respiratory, sleep stages, ECG).
 
-We provide one of our model checkpoints inside the `sleepfm/checkpoint` folder. You can load the model as shown in the `sleepfm/3_generate_embed_pretraining.py` script. Follow all the other steps, but skip the `sleepfm/2_pretrain.py` step if you use this checkpoint. Ensure that you set the paths correctly in the `sleepfm/config.py` file.
+## 6. Train an embedding-based classifier
 
-**Note that this is a really small model. We are currently working on a larger version with some architectural improvements and trained on more data. We will be releasing the codebase and model for that soon as well. Stay tuned!👀**
+`sleepfm/4_classification_eval_pretraining.py` now supports both scikit-learn and PyTorch backends. The default (`--trainer torch`) fits a linear head in PyTorch so gradients can flow back into the encoders for XAI. Results are saved under `models/`, `probs/`, and `figures/`.
+
+```bash
+python sleepfm/4_classification_eval_pretraining.py \
+  --output_file cap_run \
+  --dataset_dir /path/to/cap/processed \
+  --dataset_event_file dataset_events_disorder_-1.pickle \
+  --label_key disorder \
+  --modality_type sleep_stages \
+  --trainer torch \
+  --max_epochs 100 --patience 15
+```
+
+The resulting checkpoint (e.g., `models/sleep_stages_disorder_linear.pt`) contains the linear weights, label mapping, and metadata required for attribution.
+
+## 7. Generate attribution maps
+
+Use `sleepfm/xai/generate_attributions.py` to compute Saliency, Integrated Gradients, SmoothGrad, and 1D Grad-CAM for any event. The script reuses the SleepFM encoder, the trained linear head, and the new attribution utilities under `sleepfm/xai/`.
+
+```bash
+python sleepfm/xai/generate_attributions.py \
+  --dataset_dir /path/to/cap/processed \
+  --output_file cap_run \
+  --linear_checkpoint /path/to/cap/processed/cap_run/models/sleep_stages_disorder_linear.pt \
+  --modality_type sleep_stages \
+  --label_key disorder \
+  --dataset_event_file dataset_events_disorder_-1.pickle \
+  --split test --index 0 --methods saliency,integrated_gradients,gradcam
+```
+
+Attribution arrays (saved as `.npy`) and JSON metadata are emitted to `cap_run/xai_outputs/` by default.
+
+## 8. End-to-end automation
+
+The helper script `sleepfm/bash_scripts/cap_pipeline.sh` stitches the full workflow together. Set `RAW_DIR`, `DATASET_DIR`, and (optionally) `LABEL_KEY` before running the script to process the dataset, generate embeddings, and fit the downstream classifier in one go.
 
 ## BibTeX
 
@@ -88,7 +138,7 @@ We provide one of our model checkpoints inside the `sleepfm/checkpoint` folder. 
   title={SleepFM: Multi-modal Representation Learning for Sleep Across Brain Activity, ECG and Respiratory Signals},
   author={Rahul Thapa and Bryan He and Magnus Ruud Kjaer and Hyatt Moore and Gauri Ganjoo and Emmanuel Mignot and James Zou},
   booktitle={International Conference on Machine Learning},
-  year={2024}
+  year={2024},
 }
 ```
 

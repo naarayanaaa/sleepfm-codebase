@@ -93,41 +93,36 @@ class EffNet(nn.Module):
         self.fc = nn.Linear(channels[8] + num_additional_features, 1)
         
         
-    def forward(self, x):
-        if self.num_additional_features >0:
-            x,additional = x
-        # N x 12 x 2500
+    def forward_features(self, x, return_intermediate: bool = False):
+        additional = None
+        if self.num_additional_features > 0:
+            x, additional = x
         x = self.b0(self.stage1(x))
-        # N x 32 x 1250
         x = self.stage2(x)
-        # N x 16 x 625
         x = self.stage3(x)
-        # N x 24 x 313
         x = self.Pool(x)
-        # N x 24 x 313
-        
         x = self.stage4(x)
-        # N x 40 x 157
         x = self.stage5(x)
-        # N x 80 x 79
         x = self.stage6(x)
-        # N x 112 x 40
         x = self.Pool(x)
-        # N x 192 x 20
-        
         x = self.stage7(x)
-        # N x 320 x 10
-        x = self.stage8(x)
-        x = self.stage9(x)
-        # N x 1280 x 10
-        x = self.act(self.AAP(x)[:,:,0])
-        # N x 1280
-        x = self.drop(x)
-        if self.num_additional_features >0:
-            x = torch.cat((x,additional),1)
-        x = self.fc(x)
-        # N x 1
-        return x
+        intermediate = self.stage8(x)
+        features = self.stage9(intermediate)
+        if return_intermediate:
+            return features, additional, intermediate
+        return features, additional
+
+    def forward_embedding(self, x):
+        features, additional = self.forward_features(x)
+        embedding = self.act(self.AAP(features)[:, :, 0])
+        embedding = self.drop(embedding)
+        if additional is not None:
+            embedding = torch.cat((embedding, additional), 1)
+        return embedding
+
+    def forward(self, x):
+        embedding = self.forward_embedding(x)
+        return self.fc(embedding)
 
 
 class EffNetSupervised(nn.Module):
@@ -162,38 +157,34 @@ class EffNetSupervised(nn.Module):
         self.num_additional_features = num_additional_features
         self.fc = nn.Linear(channels[8] + num_additional_features, num_classes)
         
-    def forward(self, x):
-        if self.num_additional_features >0:
-            x,additional = x
-        # N x 12 x 2500
+    def forward_features(self, x, return_intermediate: bool = False):
+        additional = None
+        if self.num_additional_features > 0:
+            x, additional = x
         x = self.b0(self.stage1(x))
-        # N x 32 x 1250
         x = self.stage2(x)
-        # N x 16 x 625
         x = self.stage3(x)
-        # N x 24 x 313
         x = self.Pool(x)
-        # N x 24 x 313
-        
         x = self.stage4(x)
-        # N x 40 x 157
         x = self.stage5(x)
-        # N x 80 x 79
         x = self.stage6(x)
-        # N x 112 x 40
         x = self.Pool(x)
-        # N x 192 x 20
-        
         x = self.stage7(x)
-        # N x 320 x 10
-        x = self.stage8(x)
-        x = self.stage9(x)
-        # N x 1280 x 10
-        x = self.act(self.AAP(x)[:,:,0])
-        # N x 1280
-        x = self.drop(x)
-        if self.num_additional_features >0:
-            x = torch.cat((x,additional),1)
-        x = self.fc(x)
-        # x = F.log_softmax(x, dim=1)
+        intermediate = self.stage8(x)
+        features = self.stage9(intermediate)
+        if return_intermediate:
+            return features, additional, intermediate
+        return features, additional
+
+    def forward_embedding(self, x):
+        features, additional = self.forward_features(x)
+        embedding = self.act(self.AAP(features)[:, :, 0])
+        embedding = self.drop(embedding)
+        if additional is not None:
+            embedding = torch.cat((embedding, additional), 1)
+        return embedding
+
+    def forward(self, x):
+        embedding = self.forward_embedding(x)
+        x = self.fc(embedding)
         return x
