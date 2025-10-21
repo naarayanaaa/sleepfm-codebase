@@ -1,25 +1,23 @@
-import time
-import torch
-import torchvision
-import os
-import click
-import tqdm
-import math
-import shutil
 import datetime
-import numpy as np
-from loguru import logger
-import pickle
 import math
+import os
+import pickle
+import shutil
+import time
+from pathlib import Path
+
+import click
+import numpy as np
+import torch
+import tqdm
+from loguru import logger
 
 import sys
 sys.path.append("../model")
 import models
-from config import (CONFIG, CHANNEL_DATA, 
-                    ALL_CHANNELS, CHANNEL_DATA_IDS, 
-                    PATH_TO_PROCESSED_DATA)
+from config import CHANNEL_DATA, CHANNEL_DATA_IDS, PATH_TO_PROCESSED_DATA
 
-from dataset import EventDataset as Dataset 
+from dataset import EventDataset as Dataset
 
 @click.command("generate_eval_embed")
 @click.argument("output_file", type=click.Path())
@@ -41,7 +39,8 @@ def generate_eval_embed(
 
     output_dir = os.path.join(dataset_dir, f"{output_file}")
 
-    device = torch.device("cuda")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    logger.info("Using device: %s", device)
     splits = splits.split(",")
 
     path_to_data = dataset_dir
@@ -72,7 +71,12 @@ def generate_eval_embed(
         model_ekg = torch.nn.DataParallel(model_ekg)
     model_ekg.to(device)
 
-    checkpoint = torch.load(os.path.join(output_dir, "best.pt"))
+    checkpoint_path = os.path.join(output_dir, "best.pt")
+    if not os.path.exists(checkpoint_path):
+        raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
+
+    map_location = "cuda" if device.type == "cuda" else "cpu"
+    checkpoint = torch.load(checkpoint_path, map_location=map_location)
     temperature = checkpoint["temperature"]
 
     model_resp.load_state_dict(checkpoint["respiratory_state_dict"])
@@ -106,7 +110,7 @@ def generate_eval_embed(
                     pbar.update()
         
         emb = list(map(torch.concat, emb))
-        dataset_prefix = dataset_file.split(".")[0]
+        dataset_prefix = Path(dataset_file).stem
         with open(os.path.join(path_to_save, f"{dataset_prefix}_{split}_emb.pickle"), 'wb') as file:
             pickle.dump(emb, file)
 

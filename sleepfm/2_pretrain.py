@@ -14,9 +14,7 @@ import numpy as np
 import sys
 sys.path.append("../model")
 import models
-from config import (CONFIG, CHANNEL_DATA, 
-                    ALL_CHANNELS, CHANNEL_DATA_IDS, 
-                    PATH_TO_PROCESSED_DATA)
+from config import CHANNEL_DATA_IDS, PATH_TO_PROCESSED_DATA
 from dataset import EventDataset as Dataset 
 
 
@@ -57,9 +55,11 @@ def train(
 
     dataset_file_prefix = dataset_file.split(".")[0]
     modality_types_string = "_".join(modality_types)
-    output = os.path.join(dataset_dir, f"outputs/output_{mode}_{dataset_file_prefix}_lr_{lr}_lr_sp_{lr_step_period}_wd_{weight_decay}_bs_{batch_size}_{modality_types_string}")
-
-    output = os.path.join(CONFIG.OUTPUT, output)
+    output = os.path.join(
+        dataset_dir,
+        "outputs",
+        f"output_{mode}_{dataset_file_prefix}_lr_{lr}_lr_sp_{lr_step_period}_wd_{weight_decay}_bs_{batch_size}_{modality_types_string}",
+    )
     os.makedirs(output, exist_ok=True)
     temperature = torch.nn.parameter.Parameter(torch.as_tensor(0.))
 
@@ -78,7 +78,7 @@ def train(
     ij = sum([((i, j), (j, i)) for i in range(len(modality_types)) for j in range(i + 1, len(modality_types))], ())
 
     start = time.time()
-    path_to_dataset = os.path.join(CONFIG.DATASETS, dataset_dir, dataset_file)
+    path_to_dataset = os.path.join(dataset_dir, dataset_file)
     dataset = {
         split: Dataset(path_to_dataset, 
                         split=split, 
